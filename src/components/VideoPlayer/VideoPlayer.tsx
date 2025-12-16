@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import { useVideoEditor } from '../../context/VideoEditorContext';
 import { RegionSelector } from '../RegionSelector/RegionSelector';
 import { formatTime } from '../../utils/timeFormatting';
@@ -7,7 +7,6 @@ import styles from './VideoPlayer.module.css';
 export function VideoPlayer() {
   const { state, dispatch } = useVideoEditor();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const video = videoRef.current;
@@ -25,23 +24,14 @@ export function VideoPlayer() {
       dispatch({ type: 'SET_PLAYING', payload: false });
     };
 
-    const handleLoadedMetadata = () => {
-      setVideoDimensions({
-        width: video.videoWidth,
-        height: video.videoHeight,
-      });
-    };
-
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
-    video.addEventListener('loadedmetadata', handleLoadedMetadata);
 
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
-      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
     };
   }, [dispatch]);
 
