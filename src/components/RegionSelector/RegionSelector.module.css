@@ -1,0 +1,56 @@
+.canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  cursor: crosshair;
+}
+
+.region {
+  position: absolute;
+  border: 2px solid #2196F3;
+  background: rgba(33, 150, 243, 0.2);
+  box-sizing: border-box;
+}
+
+.region.selected {
+  border-color: #FF9800;
+  background: rgba(255, 152, 0, 0.2);
+}
+
+.region.inactive {
+  border-color: #999;
+  background: rgba(153, 153, 153, 0.1);
+}
+
+.resizeHandle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: white;
+  border: 2px solid #2196F3;
+  box-sizing: border-box;
+}
+
+.resizeHandle.topLeft {
+  top: -5px;
+  left: -5px;
+  cursor: nw-resize;
+}
+
+.resizeHandle.topRight {
+  top: -5px;
+  right: -5px;
+  cursor: ne-resize;
+}
+
+.resizeHandle.bottomLeft {
+  bottom: -5px;
+  left: -5px;
+  cursor: sw-resize;
+}
+
+.resizeHandle.bottomRight {
+  bottom: -5px;
+  right: -5px;
+  cursor: se-resize;
+}

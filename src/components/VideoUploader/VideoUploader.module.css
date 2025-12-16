@@ -1,0 +1,95 @@
+.uploader {
+  width: 100%;
+  padding: 20px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.dropZone {
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  padding: 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.dropZone:hover {
+  border-color: #666;
+  background: #fafafa;
+}
+
+.dropZone.dragActive {
+  border-color: #4CAF50;
+  background: #e8f5e9;
+}
+
+.dropZone input {
+  display: none;
+}
+
+.icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.text {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.subtext {
+  font-size: 14px;
+  color: #999;
+}
+
+.videoInfo {
+  margin-top: 16px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.videoInfo h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.infoRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.infoRow:last-child {
+  border-bottom: none;
+}
+
+.label {
+  color: #666;
+  font-weight: 500;
+}
+
+.value {
+  color: #333;
+}
+
+.replaceButton {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.replaceButton:hover {
+  background: #1976D2;
+}
