@@ -3,6 +3,11 @@ import { useVideoEditor } from '../../context/VideoEditorContext';
 import { MosaicRegion } from '../../types/mosaic';
 import styles from './RegionSelector.module.css';
 
+type DragMode = 'none' | 'create' | 'move' | 'resize';
+type ResizeHandle = 'nw' | 'ne' | 'sw' | 'se' | null;
+
+const HANDLE_SIZE = 8;
+
 interface RegionSelectorProps {
   videoRef: React.RefObject<HTMLVideoElement>;
 }
@@ -10,9 +15,12 @@ interface RegionSelectorProps {
 export function RegionSelector({ videoRef }: RegionSelectorProps) {
   const { state, dispatch } = useVideoEditor();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [dragMode, setDragMode] = useState<DragMode>('none');
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [currentRect, setCurrentRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [draggedRegionId, setDraggedRegionId] = useState<string | null>(null);
+  const [resizeHandle, setResizeHandle] = useState<ResizeHandle>(null);
+  const [cursorStyle, setCursorStyle] = useState<string>('crosshair');
 
   const getCanvasCoordinates = useCallback(
     (e: MouseEvent<HTMLCanvasElement>) => {
@@ -41,6 +49,95 @@ export function RegionSelector({ videoRef }: RegionSelectorProps) {
       };
     },
     []
+  );
+
+  // 領域のピクセル座標を取得
+  const getRegionPixelCoords = useCallback(
+    (region: MosaicRegion) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return { x: 0, y: 0, width: 0, height: 0 };
+      return {
+        x: region.x * canvas.width,
+        y: region.y * canvas.height,
+        width: region.width * canvas.width,
+        height: region.height * canvas.height,
+      };
+    },
+    []
+  );
+
+  // 座標がリサイズハンドル上にあるかチェック
+  const getResizeHandle = useCallback(
+    (coords: { x: number; y: number }, region: MosaicRegion): ResizeHandle => {
+      const rect = getRegionPixelCoords(region);
+      const halfHandle = HANDLE_SIZE / 2;
+
+      // 北西 (左上)
+      if (
+        coords.x >= rect.x - halfHandle &&
+        coords.x <= rect.x + halfHandle &&
+        coords.y >= rect.y - halfHandle &&
+        coords.y <= rect.y + halfHandle
+      ) {
+        return 'nw';
+      }
+      // 北東 (右上)
+      if (
+        coords.x >= rect.x + rect.width - halfHandle &&
+        coords.x <= rect.x + rect.width + halfHandle &&
+        coords.y >= rect.y - halfHandle &&
+        coords.y <= rect.y + halfHandle
+      ) {
+        return 'ne';
+      }
+      // 南西 (左下)
+      if (
+        coords.x >= rect.x - halfHandle &&
+        coords.x <= rect.x + halfHandle &&
+        coords.y >= rect.y + rect.height - halfHandle &&
+        coords.y <= rect.y + rect.height + halfHandle
+      ) {
+        return 'sw';
+      }
+      // 南東 (右下)
+      if (
+        coords.x >= rect.x + rect.width - halfHandle &&
+        coords.x <= rect.x + rect.width + halfHandle &&
+        coords.y >= rect.y + rect.height - halfHandle &&
+        coords.y <= rect.y + rect.height + halfHandle
+      ) {
+        return 'se';
+      }
+      return null;
+    },
+    [getRegionPixelCoords]
+  );
+
+  // 座標が領域内部にあるかチェック
+  const isInsideRegion = useCallback(
+    (coords: { x: number; y: number }, region: MosaicRegion): boolean => {
+      const rect = getRegionPixelCoords(region);
+      return (
+        coords.x >= rect.x &&
+        coords.x <= rect.x + rect.width &&
+        coords.y >= rect.y &&
+        coords.y <= rect.y + rect.height
+      );
+    },
+    [getRegionPixelCoords]
+  );
+
+  // 座標にある領域を見つける
+  const findRegionAtCoords = useCallback(
+    (coords: { x: number; y: number }): MosaicRegion | null => {
+      for (const region of state.mosaicRegions) {
+        if (isInsideRegion(coords, region)) {
+          return region;
+        }
+      }
+      return null;
+    },
+    [state.mosaicRegions, isInsideRegion]
   );
 
   const drawRegions = useCallback(() => {
@@ -86,6 +183,27 @@ export function RegionSelector({ videoRef }: RegionSelectorProps) {
       ctx.fillStyle = isSelected ? '#FF9800' : '#2196F3';
       ctx.font = '12px sans-serif';
       ctx.fillText(`Mosaic ${state.mosaicRegions.indexOf(region) + 1}`, x + 4, y + 16);
+
+      // Draw resize handles for selected region
+      if (isSelected) {
+        const halfHandle = HANDLE_SIZE / 2;
+        ctx.fillStyle = '#FF9800';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1;
+
+        // 四隅にハンドルを描画
+        const handles = [
+          { x: x - halfHandle, y: y - halfHandle }, // nw
+          { x: x + width - halfHandle, y: y - halfHandle }, // ne
+          { x: x - halfHandle, y: y + height - halfHandle }, // sw
+          { x: x + width - halfHandle, y: y + height - halfHandle }, // se
+        ];
+
+        handles.forEach((handle) => {
+          ctx.fillRect(handle.x, handle.y, HANDLE_SIZE, HANDLE_SIZE);
+          ctx.strokeRect(handle.x, handle.y, HANDLE_SIZE, HANDLE_SIZE);
+        });
+      }
     });
 
     // Draw text overlays
@@ -131,14 +249,14 @@ export function RegionSelector({ videoRef }: RegionSelectorProps) {
     });
 
     // Draw current dragging rectangle
-    if (isDragging && dragStart && currentRect) {
+    if (dragMode !== 'none' && currentRect) {
       ctx.strokeStyle = '#4CAF50';
       ctx.fillStyle = 'rgba(76, 175, 80, 0.2)';
       ctx.lineWidth = 2;
       ctx.fillRect(currentRect.x, currentRect.y, currentRect.width, currentRect.height);
       ctx.strokeRect(currentRect.x, currentRect.y, currentRect.width, currentRect.height);
     }
-  }, [state.mosaicRegions, state.textOverlays, state.currentTime, state.selectedRegionId, state.selectedTextOverlayId, isDragging, dragStart, currentRect, videoRef]);
+  }, [state.mosaicRegions, state.textOverlays, state.currentTime, state.selectedRegionId, state.selectedTextOverlayId, dragMode, currentRect, videoRef]);
 
   useEffect(() => {
     drawRegions();
@@ -165,41 +283,179 @@ export function RegionSelector({ videoRef }: RegionSelectorProps) {
     (e: MouseEvent<HTMLCanvasElement>) => {
       const coords = getCanvasCoordinates(e);
 
-      // 選択中のテキストがある場合はクリックで移動（D&Dしない）
+      // 1. 選択中の領域のリサイズハンドルをチェック
+      if (state.selectedRegionId) {
+        const selectedRegion = state.mosaicRegions.find(r => r.id === state.selectedRegionId);
+        if (selectedRegion) {
+          const handle = getResizeHandle(coords, selectedRegion);
+          if (handle) {
+            setDragMode('resize');
+            setDraggedRegionId(selectedRegion.id);
+            setResizeHandle(handle);
+            setDragStart(coords);
+            const rect = getRegionPixelCoords(selectedRegion);
+            setCurrentRect(rect);
+            return;
+          }
+        }
+      }
+
+      // 2. 既存領域の内部をチェック（移動モード）
+      const regionAtCoords = findRegionAtCoords(coords);
+      if (regionAtCoords) {
+        dispatch({ type: 'SELECT_REGION', payload: regionAtCoords.id });
+        dispatch({ type: 'SELECT_TEXT_OVERLAY', payload: null });
+        setDragMode('move');
+        setDraggedRegionId(regionAtCoords.id);
+        setDragStart(coords);
+        const rect = getRegionPixelCoords(regionAtCoords);
+        setCurrentRect(rect);
+        return;
+      }
+
+      // 3. 選択中のテキストがある場合は新規作成しない（クリックで移動するため）
       if (state.selectedTextOverlayId) {
         return;
       }
 
-      setIsDragging(true);
+      // 4. 空白領域の場合は新規作成モード
+      setDragMode('create');
       setDragStart(coords);
       setCurrentRect({ x: coords.x, y: coords.y, width: 0, height: 0 });
     },
-    [getCanvasCoordinates, state.selectedTextOverlayId]
+    [getCanvasCoordinates, state.selectedTextOverlayId, state.selectedRegionId, state.mosaicRegions, getResizeHandle, getRegionPixelCoords, findRegionAtCoords, dispatch]
   );
 
   const handleMouseMove = useCallback(
     (e: MouseEvent<HTMLCanvasElement>) => {
-      if (!isDragging || !dragStart) return;
-
       const coords = getCanvasCoordinates(e);
-      const width = coords.x - dragStart.x;
-      const height = coords.y - dragStart.y;
 
-      setCurrentRect({
-        x: width < 0 ? coords.x : dragStart.x,
-        y: height < 0 ? coords.y : dragStart.y,
-        width: Math.abs(width),
-        height: Math.abs(height),
-      });
+      // カーソル更新（ドラッグ中でないとき）
+      if (dragMode === 'none') {
+        // 選択中の領域のリサイズハンドルをチェック
+        if (state.selectedRegionId) {
+          const selectedRegion = state.mosaicRegions.find(r => r.id === state.selectedRegionId);
+          if (selectedRegion) {
+            const handle = getResizeHandle(coords, selectedRegion);
+            if (handle) {
+              const cursorMap: Record<string, string> = {
+                nw: 'nw-resize',
+                ne: 'ne-resize',
+                sw: 'sw-resize',
+                se: 'se-resize',
+              };
+              setCursorStyle(cursorMap[handle]);
+              return;
+            }
+          }
+        }
+
+        // 領域内部ならmoveカーソル
+        const regionAtCoords = findRegionAtCoords(coords);
+        if (regionAtCoords) {
+          setCursorStyle('move');
+          return;
+        }
+
+        setCursorStyle('crosshair');
+        return;
+      }
+
+      if (!dragStart || !currentRect) return;
+
+      const deltaX = coords.x - dragStart.x;
+      const deltaY = coords.y - dragStart.y;
+
+      if (dragMode === 'create') {
+        // 新規作成モード：矩形を描画
+        setCurrentRect({
+          x: deltaX < 0 ? coords.x : dragStart.x,
+          y: deltaY < 0 ? coords.y : dragStart.y,
+          width: Math.abs(deltaX),
+          height: Math.abs(deltaY),
+        });
+      } else if (dragMode === 'move' && draggedRegionId) {
+        // 移動モード：領域全体を移動
+        const region = state.mosaicRegions.find(r => r.id === draggedRegionId);
+        if (region) {
+          const origRect = getRegionPixelCoords(region);
+          setCurrentRect({
+            x: origRect.x + deltaX,
+            y: origRect.y + deltaY,
+            width: origRect.width,
+            height: origRect.height,
+          });
+        }
+      } else if (dragMode === 'resize' && draggedRegionId && resizeHandle) {
+        // リサイズモード：ハンドルに応じてサイズ変更
+        const region = state.mosaicRegions.find(r => r.id === draggedRegionId);
+        if (region) {
+          const origRect = getRegionPixelCoords(region);
+          let newRect = { ...origRect };
+
+          switch (resizeHandle) {
+            case 'nw':
+              newRect.x = origRect.x + deltaX;
+              newRect.y = origRect.y + deltaY;
+              newRect.width = origRect.width - deltaX;
+              newRect.height = origRect.height - deltaY;
+              break;
+            case 'ne':
+              newRect.y = origRect.y + deltaY;
+              newRect.width = origRect.width + deltaX;
+              newRect.height = origRect.height - deltaY;
+              break;
+            case 'sw':
+              newRect.x = origRect.x + deltaX;
+              newRect.width = origRect.width - deltaX;
+              newRect.height = origRect.height + deltaY;
+              break;
+            case 'se':
+              newRect.width = origRect.width + deltaX;
+              newRect.height = origRect.height + deltaY;
+              break;
+          }
+
+          // 最小サイズを保証
+          if (newRect.width < 20) {
+            newRect.width = 20;
+            if (resizeHandle === 'nw' || resizeHandle === 'sw') {
+              newRect.x = origRect.x + origRect.width - 20;
+            }
+          }
+          if (newRect.height < 20) {
+            newRect.height = 20;
+            if (resizeHandle === 'nw' || resizeHandle === 'ne') {
+              newRect.y = origRect.y + origRect.height - 20;
+            }
+          }
+
+          setCurrentRect(newRect);
+        }
+      }
     },
-    [isDragging, dragStart, getCanvasCoordinates]
+    [dragMode, dragStart, currentRect, draggedRegionId, resizeHandle, getCanvasCoordinates, state.selectedRegionId, state.mosaicRegions, getResizeHandle, getRegionPixelCoords, findRegionAtCoords]
   );
 
   const handleMouseUp = useCallback(() => {
-    if (!isDragging || !currentRect || currentRect.width < 10 || currentRect.height < 10) {
-      setIsDragging(false);
+    if (dragMode === 'none') return;
+
+    // 新規作成モードで小さすぎる場合はキャンセル
+    if (dragMode === 'create' && (!currentRect || currentRect.width < 10 || currentRect.height < 10)) {
+      setDragMode('none');
       setDragStart(null);
       setCurrentRect(null);
+      setDraggedRegionId(null);
+      setResizeHandle(null);
+      return;
+    }
+
+    if (!currentRect) {
+      setDragMode('none');
+      setDragStart(null);
+      setCurrentRect(null);
+      setDraggedRegionId(null);
+      setResizeHandle(null);
       return;
     }
 
@@ -210,24 +466,9 @@ export function RegionSelector({ videoRef }: RegionSelectorProps) {
       currentRect.height
     );
 
-    const duration = state.videoFile?.metadata?.duration || 10;
-
-    // 選択中のモザイク領域がある場合は、その領域を更新
-    if (state.selectedRegionId) {
-      dispatch({
-        type: 'UPDATE_MOSAIC_REGION',
-        payload: {
-          id: state.selectedRegionId,
-          updates: {
-            x: normalized.x,
-            y: normalized.y,
-            width: normalized.width,
-            height: normalized.height,
-          },
-        },
-      });
-    } else {
+    if (dragMode === 'create') {
       // 新しいモザイク領域を作成
+      const duration = state.videoFile?.metadata?.duration || 10;
       const newRegion: MosaicRegion = {
         id: `region-${Date.now()}`,
         x: normalized.x,
@@ -237,48 +478,45 @@ export function RegionSelector({ videoRef }: RegionSelectorProps) {
         startTime: state.currentTime,
         endTime: Math.min(state.currentTime + 5, duration),
       };
-
       dispatch({ type: 'ADD_MOSAIC_REGION', payload: newRegion });
+    } else if ((dragMode === 'move' || dragMode === 'resize') && draggedRegionId) {
+      // 移動またはリサイズの場合は領域を更新
+      dispatch({
+        type: 'UPDATE_MOSAIC_REGION',
+        payload: {
+          id: draggedRegionId,
+          updates: {
+            x: normalized.x,
+            y: normalized.y,
+            width: normalized.width,
+            height: normalized.height,
+          },
+        },
+      });
     }
 
-    setIsDragging(false);
+    setDragMode('none');
     setDragStart(null);
     setCurrentRect(null);
+    setDraggedRegionId(null);
+    setResizeHandle(null);
   }, [
-    isDragging,
+    dragMode,
     currentRect,
+    draggedRegionId,
     normalizeCoordinates,
     state.videoFile?.metadata?.duration,
     state.currentTime,
-    state.selectedRegionId,
     dispatch,
   ]);
 
   const handleCanvasClick = useCallback(
     (e: MouseEvent<HTMLCanvasElement>) => {
-      if (isDragging) return;
+      if (dragMode !== 'none') return;
 
       const coords = getCanvasCoordinates(e);
       const canvas = canvasRef.current;
       if (!canvas) return;
-
-      // 選択中のテキストオーバーレイがある場合は、クリックした位置に移動
-      if (state.selectedTextOverlayId) {
-        const normalizedX = coords.x / canvas.width;
-        const normalizedY = coords.y / canvas.height;
-
-        dispatch({
-          type: 'UPDATE_TEXT_OVERLAY',
-          payload: {
-            id: state.selectedTextOverlayId,
-            updates: {
-              x: normalizedX,
-              y: normalizedY,
-            },
-          },
-        });
-        return;
-      }
 
       // Find clicked mosaic region
       for (const region of state.mosaicRegions) {
@@ -294,6 +532,7 @@ export function RegionSelector({ videoRef }: RegionSelectorProps) {
           coords.y <= y + height
         ) {
           dispatch({ type: 'SELECT_REGION', payload: region.id });
+          dispatch({ type: 'SELECT_TEXT_OVERLAY', payload: null });
           return;
         }
       }
@@ -311,21 +550,41 @@ export function RegionSelector({ videoRef }: RegionSelectorProps) {
           coords.y <= y + markerSize / 2
         ) {
           dispatch({ type: 'SELECT_TEXT_OVERLAY', payload: overlay.id });
+          dispatch({ type: 'SELECT_REGION', payload: null });
           return;
         }
+      }
+
+      // 選択中のテキストオーバーレイがある場合は、空白領域クリックでテキストを移動
+      if (state.selectedTextOverlayId) {
+        const normalizedX = coords.x / canvas.width;
+        const normalizedY = coords.y / canvas.height;
+
+        dispatch({
+          type: 'UPDATE_TEXT_OVERLAY',
+          payload: {
+            id: state.selectedTextOverlayId,
+            updates: {
+              x: normalizedX,
+              y: normalizedY,
+            },
+          },
+        });
+        return;
       }
 
       // Deselect if clicked outside
       dispatch({ type: 'SELECT_REGION', payload: null });
       dispatch({ type: 'SELECT_TEXT_OVERLAY', payload: null });
     },
-    [isDragging, getCanvasCoordinates, state.mosaicRegions, state.textOverlays, state.selectedTextOverlayId, dispatch]
+    [dragMode, getCanvasCoordinates, state.mosaicRegions, state.textOverlays, state.selectedTextOverlayId, dispatch]
   );
 
   return (
     <canvas
       ref={canvasRef}
       className={styles.canvas}
+      style={{ cursor: cursorStyle }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}

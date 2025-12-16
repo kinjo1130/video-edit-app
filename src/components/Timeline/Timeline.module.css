@@ -134,27 +134,29 @@
 
 .handle {
   position: absolute;
-  top: 0;
-  width: 10px;
-  height: 100%;
-  background: #2196F3;
+  top: -2px;
+  width: 12px;
+  height: calc(100% + 4px);
+  background: #FF5722;
   cursor: ew-resize;
   z-index: 2;
-  transition: background 0.2s;
+  transition: background 0.2s, transform 0.1s;
+  border-radius: 3px;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
 .handle:hover {
-  background: #1976D2;
+  background: #E64A19;
+  transform: scaleX(1.2);
 }
 
 .handle.left {
-  left: -5px;
-  border-radius: 4px 0 0 4px;
+  left: -6px;
 }
 
 .handle.right {
-  right: -5px;
-  border-radius: 0 4px 4px 0;
+  right: -6px;
 }
 
 .handle.selected {
@@ -166,11 +168,11 @@
 }
 
 .textBar .handle {
-  background: #4CAF50;
+  background: #FF5722;
 }
 
 .textBar .handle:hover {
-  background: #388E3C;
+  background: #E64A19;
 }
 
 .emptyMessage {

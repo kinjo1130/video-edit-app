@@ -8,8 +8,11 @@ export function Timeline() {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [draggingHandle, setDraggingHandle] = useState<{
     id: string;
-    type: 'start' | 'end';
+    type: 'start' | 'end' | 'move';
     category: 'mosaic' | 'text';
+    initialTime?: number;
+    initialStartTime?: number;
+    initialEndTime?: number;
   } | null>(null);
 
   const duration = state.videoFile?.metadata?.duration || 0;
@@ -37,11 +40,45 @@ export function Timeline() {
   );
 
   const handleHandleMouseDown = useCallback(
-    (e: MouseEvent, id: string, type: 'start' | 'end', category: 'mosaic' | 'text') => {
+    (e: MouseEvent, id: string, type: 'start' | 'end' | 'move', category: 'mosaic' | 'text') => {
       e.stopPropagation();
-      setDraggingHandle({ id, type, category });
+
+      if (type === 'move') {
+        const rect = timelineRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const x = e.clientX - rect.left;
+        const initialTime = getTimeFromX(x);
+
+        if (category === 'mosaic') {
+          const region = state.mosaicRegions.find((r) => r.id === id);
+          if (region) {
+            setDraggingHandle({
+              id,
+              type,
+              category,
+              initialTime,
+              initialStartTime: region.startTime,
+              initialEndTime: region.endTime
+            });
+          }
+        } else {
+          const overlay = state.textOverlays.find((t) => t.id === id);
+          if (overlay) {
+            setDraggingHandle({
+              id,
+              type,
+              category,
+              initialTime,
+              initialStartTime: overlay.startTime,
+              initialEndTime: overlay.endTime
+            });
+          }
+        }
+      } else {
+        setDraggingHandle({ id, type, category });
+      }
     },
-    []
+    [getTimeFromX, state.mosaicRegions, state.textOverlays]
   );
 
   const handleMouseMove = useCallback(
@@ -65,13 +102,36 @@ export function Timeline() {
               updates: { startTime: clampedTime },
             },
           });
-        } else {
+        } else if (draggingHandle.type === 'end') {
           const clampedTime = Math.max(region.startTime + 0.1, Math.min(newTime, duration));
           dispatch({
             type: 'UPDATE_MOSAIC_REGION',
             payload: {
               id: region.id,
               updates: { endTime: clampedTime },
+            },
+          });
+        } else if (draggingHandle.type === 'move' && draggingHandle.initialTime !== undefined) {
+          const delta = newTime - draggingHandle.initialTime;
+          const regionDuration = (draggingHandle.initialEndTime || 0) - (draggingHandle.initialStartTime || 0);
+          let newStart = (draggingHandle.initialStartTime || 0) + delta;
+          let newEnd = (draggingHandle.initialEndTime || 0) + delta;
+
+          // 範囲内に収める
+          if (newStart < 0) {
+            newStart = 0;
+            newEnd = regionDuration;
+          }
+          if (newEnd > duration) {
+            newEnd = duration;
+            newStart = duration - regionDuration;
+          }
+
+          dispatch({
+            type: 'UPDATE_MOSAIC_REGION',
+            payload: {
+              id: region.id,
+              updates: { startTime: newStart, endTime: newEnd },
             },
           });
         }
@@ -88,13 +148,36 @@ export function Timeline() {
               updates: { startTime: clampedTime },
             },
           });
-        } else {
+        } else if (draggingHandle.type === 'end') {
           const clampedTime = Math.max(overlay.startTime + 0.1, Math.min(newTime, duration));
           dispatch({
             type: 'UPDATE_TEXT_OVERLAY',
             payload: {
               id: overlay.id,
               updates: { endTime: clampedTime },
+            },
+          });
+        } else if (draggingHandle.type === 'move' && draggingHandle.initialTime !== undefined) {
+          const delta = newTime - draggingHandle.initialTime;
+          const overlayDuration = (draggingHandle.initialEndTime || 0) - (draggingHandle.initialStartTime || 0);
+          let newStart = (draggingHandle.initialStartTime || 0) + delta;
+          let newEnd = (draggingHandle.initialEndTime || 0) + delta;
+
+          // 範囲内に収める
+          if (newStart < 0) {
+            newStart = 0;
+            newEnd = overlayDuration;
+          }
+          if (newEnd > duration) {
+            newEnd = duration;
+            newStart = duration - overlayDuration;
+          }
+
+          dispatch({
+            type: 'UPDATE_TEXT_OVERLAY',
+            payload: {
+              id: overlay.id,
+              updates: { startTime: newStart, endTime: newEnd },
             },
           });
         }
@@ -166,7 +249,12 @@ export function Timeline() {
         </div>
       </div>
 
-      <div className={styles.tracks}>
+      <div
+        className={styles.tracks}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
         {state.mosaicRegions.length === 0 && state.textOverlays.length === 0 ? (
           <div className={styles.emptyMessage}>
             モザイク領域やテキストを追加すると、ここにタイムラインが表示されます
@@ -194,7 +282,9 @@ export function Timeline() {
                         style={{
                           left: `${startPercent}%`,
                           width: `${widthPercent}%`,
+                          cursor: 'grab',
                         }}
+                        onMouseDown={(e) => handleHandleMouseDown(e, region.id, 'move', 'mosaic')}
                       >
                         <div
                           className={`${styles.handle} ${styles.left} ${isSelected ? styles.selected : ''}`}
@@ -232,7 +322,9 @@ export function Timeline() {
                         style={{
                           left: `${startPercent}%`,
                           width: `${widthPercent}%`,
+                          cursor: 'grab',
                         }}
+                        onMouseDown={(e) => handleHandleMouseDown(e, overlay.id, 'move', 'text')}
                       >
                         <div
                           className={`${styles.handle} ${styles.left} ${isSelected ? styles.selected : ''}`}
