@@ -83,7 +83,7 @@ export function VideoPlayer() {
     <div className={styles.container}>
       <div className={styles.videoWrapper}>
         <video ref={videoRef} src={state.videoFile.url} className={styles.video} />
-        <RegionSelector videoRef={videoRef} videoDimensions={videoDimensions} />
+        <RegionSelector videoRef={videoRef} />
       </div>
 
       <div className={styles.controls}>

@@ -5,15 +5,14 @@ import styles from './RegionSelector.module.css';
 
 interface RegionSelectorProps {
   videoRef: React.RefObject<HTMLVideoElement>;
-  videoDimensions: { width: number; height: number };
 }
 
-export function RegionSelector({ videoRef, videoDimensions }: RegionSelectorProps) {
+export function RegionSelector({ videoRef }: RegionSelectorProps) {
   const { state, dispatch } = useVideoEditor();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
-  const [currentRect, setCurrentRect] = useState<DOMRect | null>(null);
+  const [currentRect, setCurrentRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const getCanvasCoordinates = useCallback(
     (e: MouseEvent<HTMLCanvasElement>) => {

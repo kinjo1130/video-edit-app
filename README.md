@@ -1,194 +1,201 @@
 # 動画モザイク編集アプリ
 
-MP4動画にモザイクをかけるWebアプリケーションです。ブラウザ内で完結するため、サーバーへのアップロードは不要です。
+ブラウザ上で動画にモザイクとテキストを追加できるWebアプリケーション
 
-## 機能
+## 主な機能
 
-- 📹 MP4動画のアップロード（ドラッグ&ドロップ対応）
-- 🎯 キャンバス上でのモザイク領域の選択
-- 📊 複数のモザイク領域を管理
-- ⏱️ タイムラインで各モザイクの時間範囲を指定
-- 💾 編集済み動画の書き出し
+- ✅ 動画のアップロードとプレビュー
+- ✅ モザイク領域の追加と編集
+- ✅ テキストオーバーレイの追加と編集
+- ✅ タイムライン上での時間調整
+- ✅ Canvas APIによる動画処理
+- ✅ WebM形式での書き出し
 
 ## 技術スタック
 
-- **React 18** - UIフレームワーク
-- **TypeScript** - 型安全性
-- **Vite** - 高速ビルドツール
-- **FFmpeg.wasm** - ブラウザ内動画処理
+- **フロントエンド**: React 18 + TypeScript
+- **ビルドツール**: Vite 5
+- **動画処理**: Canvas API + MediaRecorder API
+- **状態管理**: React Context API (useReducer)
+- **スタイル**: CSS Modules
+
+## アーキテクチャ
+
+### ディレクトリ構成
+
+```
+src/
+├── components/          # UIコンポーネント
+│   ├── VideoPlayer/    # 動画プレーヤー
+│   ├── RegionSelector/ # Canvas上で領域選択
+│   ├── Timeline/       # タイムラインとトラック
+│   ├── MosaicManager/  # モザイク領域の詳細設定
+│   ├── TextOverlayManager/ # テキストの詳細設定
+│   └── ExportPanel/    # 書き出しUI
+├── context/            # 状態管理
+│   └── VideoEditorContext.tsx
+├── hooks/              # カスタムフック
+│   ├── useCanvasVideoProcessor.ts
+│   └── useVideoMetadata.ts
+├── utils/              # ユーティリティ
+│   ├── canvasVideoProcessing.ts # コア処理エンジン
+│   ├── canvasBlur.ts   # ぼかし効果
+│   ├── canvasText.ts   # テキスト描画
+│   ├── audioExtraction.ts # 音声抽出
+│   └── mediaRecorderHelper.ts # 録画管理
+└── types/              # 型定義
+    ├── mosaic.ts
+    ├── textOverlay.ts
+    └── video.ts
+```
+
+### データフロー
+
+```
+動画アップロード
+  ↓
+VideoEditorContext (グローバル状態)
+  ↓
+├── VideoPlayer (プレビュー)
+├── RegionSelector (Canvas上で領域選択)
+├── Timeline (時間調整)
+├── MosaicManager (詳細設定)
+├── TextOverlayManager (詳細設定)
+└── ExportPanel (書き出し)
+      ↓
+canvasVideoProcessing (動画処理エンジン)
+  ↓
+├── フレーム抽出
+├── ぼかし適用 (canvasBlur)
+├── テキスト描画 (canvasText)
+├── 音声抽出 (audioExtraction)
+└── MediaRecorder (録画)
+      ↓
+WebM動画出力
+```
+
+### 動画処理の仕組み
+
+1. **フレーム抽出**: Video要素から`canvas.drawImage()`でフレームを取得
+2. **モザイク適用**: Canvas Filter API (`ctx.filter = 'blur(20px)'`) でぼかし
+3. **テキスト描画**: Canvas 2D API (`ctx.fillText()`) でテキストを描画
+4. **録画**: `canvas.captureStream()` + `MediaRecorder` でリアルタイム録画
+5. **音声保持**: Web Audio APIで元動画から音声トラックを抽出して結合
 
 ## セットアップ
-
-### 必要要件
-
-- Node.js 16以上
-- npm または yarn
-
-### インストール
 
 ```bash
 # 依存関係のインストール
 npm install
 
-# 開発サーバーの起動
+# 開発サーバー起動
 npm run dev
-```
 
-開発サーバーが起動したら、ブラウザで `http://localhost:5173` を開いてください。
-
-### ビルド
-
-```bash
-# 本番環境用にビルド
+# ビルド
 npm run build
 
-# ビルド結果のプレビュー
+# プレビュー
 npm run preview
 ```
 
 ## 使い方
 
-### 1. 動画のアップロード
+### 基本的な流れ
 
-- 画面上部のドラッグ&ドロップエリアにMP4動画をドロップするか、クリックしてファイルを選択します
-- 最大100MBまでの動画に対応しています
+1. 動画ファイルをアップロード
+2. VideoPlayer上でドラッグしてモザイク領域を作成
+3. テキストを追加してクリックで配置
+4. Timelineで表示時間を調整
+5. 「動画を書き出す」をクリック
 
-### 2. モザイク領域の選択
+### モザイクの追加
 
-- 動画プレイヤー上でマウスをドラッグして、モザイクをかけたい領域を選択します
-- 複数の領域を追加できます
-- 既存の領域をクリックすると選択状態になります
+- **新規作成**: VideoPlayer上でドラッグ
+- **選択**: モザイク領域をクリック
+- **サイズ変更**: 選択中にドラッグ
+- **時間調整**: Timelineのハンドルをドラッグ
 
-### 3. 時間範囲の調整
+### テキストの追加
 
-- タイムライン上で各モザイク領域の開始/終了時刻を調整できます
-- ハンドルをドラッグして時間範囲を変更します
-- タイムライン上をクリックすると、その時刻にシークします
+- **新規作成**: TextOverlayManagerで「追加」をクリック
+- **位置変更**: テキストを選択してVideoPlayerをクリック
+- **内容編集**: TextOverlayManagerのテキストエリアで編集
+- **スタイル変更**: フォントサイズ・色を調整
 
-### 4. モザイク領域の管理
+## 開発者向け情報
 
-- 右側のパネルで、すべてのモザイク領域を確認できます
-- 各領域の詳細（位置、サイズ、時間範囲）が表示されます
-- 「削除」ボタンで不要な領域を削除できます
+### 状態管理
 
-### 5. 動画の書き出し
+Context APIとuseReducerパターンで状態を一元管理しています。すべての状態は`VideoEditorContext`に集約され、アクションベースで更新されます。
 
-- 「モザイク動画を書き出す」ボタンをクリックします
-- FFmpegがブラウザ内で動画を処理します（数分かかる場合があります）
-- 処理完了後、「ダウンロード」ボタンで動画を保存できます
+### 主要な型定義
 
-## プロジェクト構造
+```typescript
+interface MosaicRegion {
+  id: string;
+  x: number;          // 0-1の正規化座標
+  y: number;
+  width: number;
+  height: number;
+  startTime: number;  // 秒単位
+  endTime: number;
+  blurStrength?: number;
+}
 
-```
-src/
-├── components/           # UIコンポーネント
-│   ├── VideoUploader/    # 動画アップロード
-│   ├── VideoPlayer/      # 動画再生
-│   ├── RegionSelector/   # モザイク領域選択
-│   ├── Timeline/         # タイムライン
-│   ├── MosaicManager/    # モザイク領域管理
-│   └── ExportPanel/      # 書き出しパネル
-├── context/              # グローバル状態管理
-│   └── VideoEditorContext.tsx
-├── hooks/                # カスタムフック
-│   ├── useFFmpeg.ts      # FFmpeg.wasm統合
-│   └── useVideoMetadata.ts
-├── utils/                # ユーティリティ
-│   ├── ffmpegCommands.ts # FFmpegコマンド生成
-│   ├── videoProcessing.ts
-│   └── timeFormatting.ts
-├── types/                # TypeScript型定義
-│   ├── mosaic.ts
-│   └── video.ts
-├── App.tsx               # メインアプリ
-└── main.tsx              # エントリーポイント
-```
+interface TextOverlay {
+  id: string;
+  text: string;
+  x: number;          // 0-1の正規化座標
+  y: number;
+  startTime: number;
+  endTime: number;
+  fontSize: number;
+  fontColor: string;
+  backgroundColor?: string;
+}
 
-## 重要な注意事項
-
-### ブラウザ互換性
-
-FFmpeg.wasmは`SharedArrayBuffer`を使用するため、以下のHTTPヘッダーが必要です：
-
-```
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: require-corp
-```
-
-Vite開発サーバーではこれらのヘッダーが自動的に設定されます。
-
-### 本番環境デプロイ
-
-本番環境でデプロイする場合、サーバー側でこれらのヘッダーを設定する必要があります。
-
-#### Netlify
-
-`netlify.toml`:
-```toml
-[[headers]]
-  for = "/*"
-  [headers.values]
-    Cross-Origin-Opener-Policy = "same-origin"
-    Cross-Origin-Embedder-Policy = "require-corp"
-```
-
-#### Vercel
-
-`vercel.json`:
-```json
-{
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Cross-Origin-Opener-Policy",
-          "value": "same-origin"
-        },
-        {
-          "key": "Cross-Origin-Embedder-Policy",
-          "value": "require-corp"
-        }
-      ]
-    }
-  ]
+interface VideoMetadata {
+  duration: number;   // 秒単位
+  width: number;      // ピクセル
+  height: number;     // ピクセル
+  fps: number;        // フレームレート
+  size: number;       // バイト
 }
 ```
 
-### パフォーマンス
+### パフォーマンス最適化
 
-- ブラウザ内での動画処理は時間がかかります（数分程度）
-- 大きな動画ファイル（100MB以上）は避けてください
-- Chrome または Edge ブラウザを推奨します
+- フレームレートに基づく効率的な処理
+- 正規化座標（0-1）で解像度非依存
+- Canvas `willReadFrequently` オプションの使用
+- MediaRecorderによるリアルタイム録画
 
-## トラブルシューティング
+### ブラウザ互換性
 
-### FFmpegが読み込めない
+- **Canvas API**: すべてのモダンブラウザ
+- **MediaRecorder**: Chrome 47+, Firefox 25+, Safari 14.1+
+- **Canvas filters**: Chrome 52+, Firefox 49+, Safari 9.1+
+- **canvas.captureStream**: Chrome 51+, Firefox 43+, Safari 11+
 
-- ブラウザがSharedArrayBufferをサポートしているか確認してください
-- HTTPSまたはlocalhostで実行されているか確認してください
-- ブラウザのコンソールでエラーメッセージを確認してください
+推奨ブラウザ: Google Chrome, Firefox, Safari (最新版)
 
-### 動画処理が遅い
+## 主要なファイル解説
 
-- 動画の解像度を下げてみてください
-- モザイク領域の数を減らしてみてください
-- より高性能なマシンを使用してください
+### `src/utils/canvasVideoProcessing.ts`
+動画処理のコアエンジン。フレームごとにエフェクトを適用してMediaRecorderで録画します。
 
-### メモリ不足エラー
+### `src/utils/canvasBlur.ts`
+Canvas Filter APIを使用したぼかし効果の実装。正規化座標からピクセル座標への変換も担当。
 
-- より小さい動画ファイルを使用してください
-- ブラウザのタブを閉じてメモリを解放してください
+### `src/utils/canvasText.ts`
+Canvas 2D APIでテキストを描画。背景ボックスやカスタムカラーをサポート。
+
+### `src/context/VideoEditorContext.tsx`
+グローバル状態管理。動画ファイル、モザイク領域、テキストオーバーレイ、再生状態などを管理。
+
+### `src/components/RegionSelector/RegionSelector.tsx`
+Canvas上でのマウスイベントを処理し、モザイク領域の作成・選択・編集を可能にします。
 
 ## ライセンス
 
 MIT
-
-## 貢献
-
-プルリクエストを歓迎します！
-
-## サポート
-
-問題が発生した場合は、GitHubのIssuesで報告してください。
-# video-edit-app
